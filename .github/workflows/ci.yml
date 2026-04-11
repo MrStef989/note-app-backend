@@ -15,6 +15,21 @@ jobs:
     name: Build & Test
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: yaobezyana
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +43,11 @@ jobs:
 
       - name: Build and run tests
         run: mvn --batch-mode verify
+        env:
+          DB_URL: jdbc:postgresql://localhost:5432/yaobezyana
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          JWT_SECRET: ci-test-secret-key-32-characters-min
 
       - name: Upload test results
         if: always()
