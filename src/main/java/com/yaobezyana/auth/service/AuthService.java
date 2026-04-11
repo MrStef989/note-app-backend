@@ -22,10 +22,7 @@ public class AuthService implements UserDetailsService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
 
-    /**
-     * Регистрирует нового пользователя и возвращает JWT-токен.
-     */
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request, String ipAddress) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email already in use");
         }
@@ -33,6 +30,7 @@ public class AuthService implements UserDetailsService {
         User user = User.builder()
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .ipAddress(ipAddress)
                 .build();
 
         userRepository.save(user);
@@ -42,9 +40,6 @@ public class AuthService implements UserDetailsService {
                 .build();
     }
 
-    /**
-     * Аутентифицирует пользователя и возвращает JWT-токен.
-     */
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
