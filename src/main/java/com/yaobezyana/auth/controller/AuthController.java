@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,8 +37,16 @@ public class AuthController {
     })
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        return authService.register(request);
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request,
+                                 HttpServletRequest httpRequest) {
+        String ip = httpRequest.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isBlank()) {
+            ip = httpRequest.getRemoteAddr();
+        } else {
+            // X-Forwarded-For может содержать несколько IP через запятую — берём первый
+            ip = ip.split(",")[0].trim();
+        }
+        return authService.register(request, ip);
     }
 
     @Operation(summary = "Вход в систему",

@@ -1,6 +1,6 @@
 -- liquibase formatted sql
 
--- changeset yaobezyana:5
+-- changeset yaobezyana:6
 CREATE TABLE sprints (
     id           BIGSERIAL PRIMARY KEY,
     user_id      BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -14,13 +14,13 @@ CREATE TABLE sprints (
     updated_at   TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
--- changeset yaobezyana:6
+-- changeset yaobezyana:7
 CREATE INDEX idx_sprints_user_id ON sprints(user_id);
 CREATE INDEX idx_sprints_status  ON sprints(status);
 
--- changeset yaobezyana:7
+-- changeset yaobezyana:8
 ALTER TABLE projects ADD COLUMN sprint_id BIGINT REFERENCES sprints(id) ON DELETE SET NULL;
 CREATE INDEX idx_projects_sprint_id ON projects(sprint_id);
 
--- changeset yaobezyana:8
+-- changeset yaobezyana:9
 ALTER TABLE tasks ADD COLUMN position INT NOT NULL DEFAULT 0;

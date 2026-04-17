@@ -27,6 +27,9 @@ public class User implements UserDetails {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of();
