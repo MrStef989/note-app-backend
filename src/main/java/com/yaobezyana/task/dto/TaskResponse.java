@@ -27,11 +27,14 @@ public class TaskResponse {
     @Schema(description = "Название проекта", example = "Работа")
     private String projectTitle;
 
+    @Schema(description = "ID спринта, к которому относится проект задачи (null если не в спринте)", example = "1")
+    private Long sprintId;
+
     @Schema(description = "Статус задачи", example = "ACTIVE")
     private TaskStatus status;
 
-    @Schema(description = "Находится ли задача в Inbox", example = "false")
-    private boolean inbox;
+    @Schema(description = "Позиция задачи внутри проекта для сортировки (0-based)", example = "0")
+    private int position;
 
     @Schema(description = "Срок выполнения", example = "2026-04-15T09:00:00")
     private LocalDateTime dueDate;

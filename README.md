@@ -1,35 +1,56 @@
 # Я Обезьяна — Backend API
 
-Персональный планировщик задач с двумя слоями: общий список задач и Inbox (задачи на сегодня).
+Kanban-доска с режимом фокуса. Модель: **умный человек** планирует → **обезьянка** выполняет без отвлечений.
 
 ## Содержание
 
-- [Запуск локально](#запуск-локально)
+- [Концепция](#концепция)
+- [Запуск](#запуск)
 - [Аутентификация](#аутентификация)
-- [Порядок работы с API](#порядок-работы-с-api)
+- [Порядок работы](#порядок-работы)
 - [Endpoints](#endpoints)
   - [Auth](#auth)
+  - [Sprints — Planner mode](#sprints--planner-mode)
+  - [Sprints — Focus mode](#sprints--focus-mode)
   - [Projects](#projects)
   - [Tasks](#tasks)
-  - [Inbox](#inbox)
-- [Фильтрация задач](#фильтрация-задач)
+- [Статусы](#статусы)
 - [Ошибки](#ошибки)
 
 ---
 
-## Запуск локально
+## Концепция
 
-### Вариант 1: Docker Compose (всё вместе)
+### Умный человек (Planner mode)
+Полный доступ: создаёт спринты, добавляет проекты и задачи, задаёт порядок, запускает спринт.
 
-Запускает приложение + PostgreSQL в контейнерах.
+### Обезьянка (Focus mode)
+Активируется после запуска спринта. Видит список незавершённых задач по проектам. Сама выбирает любую задачу → берёт в работу → выполняет. Пока задача `IN_PROGRESS` — взять другую нельзя. После выполнения всех задач → спринт завершается → все функции разблокируются.
+
+### Иерархия
+```
+User → Sprint → Project → Task
+```
+
+---
+
+## Запуск
+
+### Docker Compose (рекомендуется)
 
 ```bash
 docker-compose up --build
 ```
 
-Приложение доступно на `http://localhost:8080`.
+| Сервис    | URL                              |
+|-----------|----------------------------------|
+| API       | http://localhost:8080            |
+| Swagger   | http://localhost:8080/swagger-ui |
+| pgAdmin   | http://localhost:5050            |
 
-### Вариант 2: Maven + локальная БД (для разработки)
+**pgAdmin:** email `admin@yaobezyana.local`, пароль `admin`.
+
+### Maven + локальная БД (для разработки)
 
 Spring Boot автоматически поднимает PostgreSQL через `compose.yaml` при старте.
 
@@ -39,41 +60,51 @@ Spring Boot автоматически поднимает PostgreSQL через 
 ./mvnw spring-boot:run
 ```
 
-Spring Boot сам запустит контейнер с PostgreSQL (через spring-boot-docker-compose), применит миграции Liquibase и стартует на порту `8080`.
-
 ### Переменные окружения
 
-| Переменная       | По умолчанию                                      | Описание              |
-|------------------|---------------------------------------------------|-----------------------|
-| `DB_URL`         | `jdbc:postgresql://localhost:5432/yaobezyana`     | URL базы данных       |
-| `DB_USERNAME`    | `postgres`                                        | Пользователь БД       |
-| `DB_PASSWORD`    | `postgres`                                        | Пароль БД             |
-| `JWT_SECRET`     | `dev-secret-key-please-change-in-production-32ch` | Секрет JWT (мин. 32 символа) |
-| `JWT_EXPIRATION` | `86400000`                                        | Время жизни токена, мс (24 ч) |
+| Переменная       | По умолчанию                                      | Описание                    |
+|------------------|---------------------------------------------------|-----------------------------|
+| `DB_URL`         | `jdbc:postgresql://localhost:5432/yaobezyana`     | URL базы данных             |
+| `DB_USERNAME`    | `postgres`                                        | Пользователь БД             |
+| `DB_PASSWORD`    | `postgres`                                        | Пароль БД                   |
+| `JWT_SECRET`     | `dev-secret-key-please-change-in-production-32ch` | Секрет JWT (мин. 32 символа)|
+| `JWT_EXPIRATION` | `86400000`                                        | Время жизни токена, мс (24ч)|
 
 ---
 
 ## Аутентификация
 
-Все эндпоинты кроме `/api/auth/*` требуют JWT-токен в заголовке:
+Все эндпоинты кроме `/api/auth/*` требуют JWT-токен:
 
 ```
 Authorization: Bearer <token>
 ```
 
-Токен получается при регистрации или логине.
-
 ---
 
-## Порядок работы с API
+## Порядок работы
 
-1. **Зарегистрироваться** → `POST /api/auth/register`
-2. **Войти** → `POST /api/auth/login` (получить токен)
-3. *(опционально)* **Создать проект** → `POST /api/projects`
-4. **Создать задачи** → `POST /api/tasks`
-5. **Добавить задачи в Inbox** → `PATCH /api/tasks/{id}/inbox`
-6. **Посмотреть Inbox** → `GET /api/inbox`
-7. **Завершить задачу** → `PATCH /api/tasks/{id}/complete`
+### Planner mode (планирование)
+
+```
+1. POST /api/auth/register          — регистрация
+2. POST /api/auth/login             — получить токен
+3. POST /api/sprints                — создать спринт
+4. POST /api/projects               — создать проект (указать sprintId)
+5. POST /api/tasks                  — создать задачи (указать projectId)
+6. PATCH /api/sprints/{id}/projects/{pid}/tasks/reorder  — задать порядок (опционально)
+7. PATCH /api/sprints/{id}/start    — запустить спринт → включается Focus mode
+```
+
+### Focus mode (выполнение)
+
+```
+1. GET  /api/sprints/{id}/tasks     — посмотреть незавершённые задачи
+2. PATCH /api/tasks/{id}/take       — взять задачу → статус IN_PROGRESS
+3. PATCH /api/tasks/{id}/complete   — выполнить задачу → статус COMPLETED
+4. (повторять 1–3 до конца)
+5. PATCH /api/sprints/{id}/complete — завершить спринт (когда все задачи COMPLETED)
+```
 
 ---
 
@@ -89,22 +120,13 @@ POST /api/auth/register
 
 **Body:**
 ```json
-{
-  "email": "user@example.com",
-  "password": "secret123"
-}
+{ "email": "user@example.com", "password": "secret123" }
 ```
 
-Валидация: `email` — валидный адрес, `password` — минимум 6 символов.
-
-**Response `201 Created`:**
+**Response `201`:**
 ```json
-{
-  "token": "eyJhbGciOiJIUzI1NiJ9..."
-}
+{ "token": "eyJhbGciOiJIUzI1NiJ9..." }
 ```
-
----
 
 #### Вход
 
@@ -112,26 +134,182 @@ POST /api/auth/register
 POST /api/auth/login
 ```
 
-**Body:**
-```json
-{
-  "email": "user@example.com",
-  "password": "secret123"
-}
-```
+**Body:** аналогично регистрации.
 
-**Response `200 OK`:**
+**Response `200`:**
 ```json
-{
-  "token": "eyJhbGciOiJIUzI1NiJ9..."
-}
+{ "token": "eyJhbGciOiJIUzI1NiJ9..." }
 ```
 
 ---
 
-### Projects
+### Sprints — Planner mode
 
 > Все запросы требуют `Authorization: Bearer <token>`
+
+#### Список спринтов
+
+```
+GET /api/sprints
+```
+
+**Response `200`:** массив `SprintSummaryResponse` (новые первые).
+
+#### Детали спринта
+
+```
+GET /api/sprints/{id}
+```
+
+**Response `200`:** `SprintDetailResponse` — метаданные + все проекты + все задачи.
+
+```json
+{
+  "id": 1,
+  "title": "Sprint 1 — MVP",
+  "description": "...",
+  "goals": "...",
+  "status": "PLANNING",
+  "totalTasks": 8,
+  "completedTasks": 0,
+  "projects": [
+    {
+      "id": 2,
+      "title": "Backend",
+      "tasks": [
+        {
+          "id": 5,
+          "title": "Написать тесты",
+          "status": "ACTIVE",
+          "position": 0,
+          "projectId": 2,
+          "sprintId": 1,
+          ...
+        }
+      ]
+    }
+  ],
+  "startedAt": null,
+  "completedAt": null,
+  "createdAt": "...",
+  "updatedAt": "..."
+}
+```
+
+#### Создать спринт
+
+```
+POST /api/sprints
+```
+
+**Body:**
+```json
+{
+  "title": "Sprint 1 — MVP",
+  "description": "Основные фичи",
+  "goals": "Auth, CRUD, Focus mode"
+}
+```
+
+**Response `201`:** `SprintSummaryResponse`
+
+#### Обновить спринт
+
+```
+PUT /api/sprints/{id}
+```
+
+Доступно только в статусе `PLANNING`. Тело — аналогично созданию.
+
+#### Удалить спринт
+
+```
+DELETE /api/sprints/{id}
+```
+
+Доступно только в статусе `PLANNING`. Проекты спринта не удаляются, `sprintId` обнуляется.
+
+**Response `204`**
+
+#### Запустить спринт
+
+```
+PATCH /api/sprints/{id}/start
+```
+
+Условия:
+- Статус `PLANNING`
+- Хотя бы один проект с незавершёнными задачами
+- Нет другого активного спринта у пользователя
+
+**Response `200`:** `SprintSummaryResponse` со статусом `ACTIVE`
+
+#### Завершить спринт
+
+```
+PATCH /api/sprints/{id}/complete
+```
+
+Условия:
+- Статус `ACTIVE`
+- Все задачи спринта в статусе `COMPLETED`
+
+**Response `200`:** `SprintSummaryResponse` со статусом `COMPLETED`
+
+#### Переупорядочить задачи
+
+```
+PATCH /api/sprints/{sprintId}/projects/{projectId}/tasks/reorder
+```
+
+Доступно только в статусе `PLANNING`. Задаёт поле `position` для каждой задачи.
+
+**Body:**
+```json
+{ "taskIds": [5, 3, 7, 2] }
+```
+
+**Response `204`**
+
+---
+
+### Sprints — Focus mode
+
+#### Получить сессию фокуса
+
+```
+GET /api/sprints/{id}/tasks
+```
+
+Доступно только если спринт в статусе `ACTIVE`.
+
+**Response `200`:**
+```json
+{
+  "sprintId": 1,
+  "sprintTitle": "Sprint 1 — MVP",
+  "sprintStatus": "ACTIVE",
+  "totalTasks": 10,
+  "completedTasks": 3,
+  "inProgressTask": null,
+  "projects": [
+    {
+      "projectId": 2,
+      "projectTitle": "Backend",
+      "tasks": [
+        { "id": 5, "title": "Написать тесты", "status": "ACTIVE", "position": 0, ... },
+        { "id": 6, "title": "Рефакторинг", "status": "ACTIVE", "position": 1, ... }
+      ]
+    }
+  ]
+}
+```
+
+`inProgressTask` — задача, которую обезьянка сейчас выполняет. Пока она не `null` — нельзя взять другую.
+
+---
+
+### Projects
 
 #### Получить все проекты
 
@@ -139,15 +317,7 @@ POST /api/auth/login
 GET /api/projects
 ```
 
-**Response `200 OK`:**
-```json
-[
-  { "id": 1, "title": "Работа" },
-  { "id": 2, "title": "Личное" }
-]
-```
-
----
+**Response `200`:** массив проектов (с `sprintId` если привязан).
 
 #### Создать проект
 
@@ -158,19 +328,14 @@ POST /api/projects
 **Body:**
 ```json
 {
-  "title": "Работа"
+  "title": "Backend",
+  "sprintId": 1
 }
 ```
 
-**Response `201 Created`:**
-```json
-{
-  "id": 1,
-  "title": "Работа"
-}
-```
+`sprintId` опционален. Если указан — спринт должен быть в статусе `PLANNING`.
 
----
+**Response `201`:** объект проекта.
 
 #### Обновить проект
 
@@ -178,22 +343,7 @@ POST /api/projects
 PUT /api/projects/{id}
 ```
 
-**Body:**
-```json
-{
-  "title": "Новое название"
-}
-```
-
-**Response `200 OK`:**
-```json
-{
-  "id": 1,
-  "title": "Новое название"
-}
-```
-
----
+Нельзя изменять проект пока его спринт в статусе `ACTIVE`.
 
 #### Удалить проект
 
@@ -201,17 +351,15 @@ PUT /api/projects/{id}
 DELETE /api/projects/{id}
 ```
 
-**Response `204 No Content`**
+Нельзя удалять проект пока его спринт в статусе `ACTIVE`. Задачи проекта сохраняются без привязки (`projectId = null`).
 
-> Задачи проекта **не удаляются** — у них сбрасывается `projectId` в `null`.
+**Response `204`**
 
 ---
 
 ### Tasks
 
-> Все запросы требуют `Authorization: Bearer <token>`
-
-#### Получить все задачи
+#### Получить задачи
 
 ```
 GET /api/tasks
@@ -219,40 +367,15 @@ GET /api/tasks
 
 Query-параметры (все опциональны):
 
-| Параметр    | Тип          | Описание                                  |
-|-------------|--------------|-------------------------------------------|
-| `projectId` | `Long`       | Фильтр по проекту                         |
-| `status`    | `String`     | `ACTIVE`, `COMPLETED` или `BLOCKED`       |
-| `search`    | `String`     | Поиск по названию (без учёта регистра)    |
-| `sortBy`    | `String`     | `title`, `dueDate` или `createdAt`        |
-| `sortDir`   | `String`     | `asc` или `desc`                          |
+| Параметр    | Тип        | Описание                                          |
+|-------------|------------|---------------------------------------------------|
+| `projectId` | `Long`     | Фильтр по проекту                                 |
+| `status`    | `String`   | `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `BLOCKED`   |
+| `search`    | `String`   | Поиск по названию (без учёта регистра)            |
+| `sortBy`    | `String`   | `title`, `dueDate` или `createdAt`                |
+| `sortDir`   | `String`   | `asc` или `desc`                                  |
 
-Примеры:
-```
-GET /api/tasks?status=ACTIVE
-GET /api/tasks?projectId=1&sortBy=dueDate&sortDir=asc
-GET /api/tasks?search=купить
-```
-
-**Response `200 OK`:**
-```json
-[
-  {
-    "id": 1,
-    "title": "Написать отчёт",
-    "description": "Q1 отчёт для менеджера",
-    "projectId": 1,
-    "projectTitle": "Работа",
-    "status": "ACTIVE",
-    "inbox": true,
-    "dueDate": "2026-04-15T10:00:00",
-    "createdAt": "2026-04-11T09:00:00",
-    "updatedAt": "2026-04-11T09:00:00"
-  }
-]
-```
-
----
+**Response `200`:** массив задач. Каждая задача содержит `sprintId` и `position`.
 
 #### Создать задачу
 
@@ -263,23 +386,18 @@ POST /api/tasks
 **Body:**
 ```json
 {
-  "title": "Написать отчёт",
-  "description": "Q1 отчёт для менеджера",
-  "projectId": 1,
-  "dueDate": "2026-04-15T10:00:00"
+  "title": "Написать тесты",
+  "description": "Покрыть сервис юнит-тестами",
+  "projectId": 2,
+  "dueDate": "2026-05-01T10:00:00"
 }
 ```
 
-Обязательно только `title`. Остальные поля опциональны.
+Обязательно только `title`. Нельзя создавать задачу в проекте активного спринта.
 
-Поведение при создании:
-- `status = ACTIVE` (если `dueDate` в прошлом или не указан)
-- `status = BLOCKED` (если `dueDate` в будущем)
-- `inbox = false` всегда
-
-**Response `201 Created`:** объект задачи (см. выше).
-
----
+**Поведение статусов:**
+- `dueDate` в будущем → `BLOCKED`
+- Иначе → `ACTIVE`
 
 #### Обновить задачу
 
@@ -287,20 +405,7 @@ POST /api/tasks
 PUT /api/tasks/{id}
 ```
 
-**Body:** те же поля, что при создании.
-
-```json
-{
-  "title": "Написать финальный отчёт",
-  "description": "Обновлённое описание",
-  "projectId": 2,
-  "dueDate": null
-}
-```
-
-**Response `200 OK`:** обновлённый объект задачи.
-
----
+Нельзя редактировать задачу в активном спринте.
 
 #### Удалить задачу
 
@@ -308,9 +413,22 @@ PUT /api/tasks/{id}
 DELETE /api/tasks/{id}
 ```
 
-**Response `204 No Content`**
+Нельзя удалять задачу в активном спринте. **Response `204`**
 
----
+#### Взять задачу в работу
+
+```
+PATCH /api/tasks/{id}/take
+```
+
+**Focus mode.** Обезьянка берёт задачу → статус `IN_PROGRESS`.
+
+Условия:
+- Задача в статусе `ACTIVE`
+- Задача в проекте активного спринта
+- В этом спринте нет другой задачи `IN_PROGRESS`
+
+**Response `200`:** обновлённая задача.
 
 #### Завершить задачу
 
@@ -318,89 +436,44 @@ DELETE /api/tasks/{id}
 PATCH /api/tasks/{id}/complete
 ```
 
-Тело не нужно.
-
-Результат:
-- `status = COMPLETED`
-- `inbox = false` (автоматически убирается из Inbox)
-
-**Response `200 OK`:** обновлённый объект задачи.
+Статус → `COMPLETED`. **Response `200`**
 
 ---
 
-#### Добавить задачу в Inbox
+## Статусы
 
-```
-PATCH /api/tasks/{id}/inbox
-```
+### Задача (`TaskStatus`)
 
-Тело не нужно.
+| Статус        | Описание                                                  |
+|---------------|-----------------------------------------------------------|
+| `ACTIVE`      | Готова к выполнению, можно взять                          |
+| `IN_PROGRESS` | Обезьянка выполняет задачу прямо сейчас                   |
+| `COMPLETED`   | Выполнена                                                 |
+| `BLOCKED`     | Заблокирована до наступления `dueDate` (авто-разблокировка каждый час) |
 
-Результат: `inbox = true`.
+### Спринт (`SprintStatus`)
 
-**Response `200 OK`:** обновлённый объект задачи.
-
----
-
-#### Убрать задачу из Inbox
-
-```
-PATCH /api/tasks/{id}/uninbox
-```
-
-Тело не нужно.
-
-Результат: `inbox = false`. Задача остаётся в общем списке.
-
-**Response `200 OK`:** обновлённый объект задачи.
-
----
-
-### Inbox
-
-#### Получить Inbox
-
-```
-GET /api/inbox
-```
-
-Возвращает задачи где `inbox = true` и `status != COMPLETED`.
-
-**Response `200 OK`:** массив объектов задач (см. формат выше).
-
----
-
-## Фильтрация задач
-
-Параметры можно комбинировать:
-
-```
-GET /api/tasks?projectId=1&status=ACTIVE&search=отчёт&sortBy=dueDate&sortDir=asc
-```
-
-| `sortBy`    | Описание              |
-|-------------|-----------------------|
-| `title`     | По названию (A→Z)     |
-| `dueDate`   | По дате выполнения    |
-| `createdAt` | По дате создания      |
+| Статус      | Возможности                                              |
+|-------------|----------------------------------------------------------|
+| `PLANNING`  | Полный доступ: CRUD проектов и задач, редактирование     |
+| `ACTIVE`    | Только Focus mode: взять задачу, завершить задачу        |
+| `COMPLETED` | Только чтение                                            |
 
 ---
 
 ## Ошибки
 
-Все ошибки возвращаются в едином формате:
-
 ```json
 {
   "status": 404,
-  "message": "Task not found with id: 99",
-  "timestamp": "2026-04-11T12:00:00"
+  "message": "Задача не найдена: 99",
+  "timestamp": "2026-04-17T12:00:00"
 }
 ```
 
-| HTTP-статус | Когда возникает                                      |
-|-------------|------------------------------------------------------|
-| `400`       | Невалидное тело запроса или бизнес-ошибка            |
-| `401`       | Нет токена или неверные credentials                  |
-| `404`       | Ресурс не найден или не принадлежит пользователю     |
-| `500`       | Внутренняя ошибка сервера                            |
+| HTTP-статус | Когда возникает                                          |
+|-------------|----------------------------------------------------------|
+| `400`       | Нарушение бизнес-правил или невалидные данные            |
+| `401`       | Нет токена или неверные credentials                      |
+| `404`       | Ресурс не найден или не принадлежит пользователю         |
+| `500`       | Внутренняя ошибка сервера                                |

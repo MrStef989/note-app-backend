@@ -25,7 +25,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "Tasks", description = "Управление задачами и Inbox")
+@Tag(name = "Tasks", description = "Управление задачами")
 @SecurityRequirement(name = "bearerAuth")
 public class TaskController {
 
@@ -44,45 +44,36 @@ public class TaskController {
             @Parameter(description = "Фильтр по ID проекта", example = "3")
             @RequestParam(required = false) Long projectId,
 
-            @Parameter(description = "Фильтр по статусу задачи", schema = @Schema(allowableValues = {"ACTIVE", "COMPLETED", "BLOCKED"}))
+            @Parameter(description = "Фильтр по статусу задачи",
+                    schema = @Schema(allowableValues = {"ACTIVE", "IN_PROGRESS", "COMPLETED", "BLOCKED"}))
             @RequestParam(required = false) TaskStatus status,
 
             @Parameter(description = "Поиск по названию (без учёта регистра)", example = "отчёт")
             @RequestParam(required = false) String search,
 
-            @Parameter(description = "Поле сортировки", schema = @Schema(allowableValues = {"title", "dueDate", "createdAt"}))
+            @Parameter(description = "Поле сортировки",
+                    schema = @Schema(allowableValues = {"title", "dueDate", "createdAt"}))
             @RequestParam(required = false) String sortBy,
 
-            @Parameter(description = "Направление сортировки", schema = @Schema(allowableValues = {"asc", "desc"}))
+            @Parameter(description = "Направление сортировки",
+                    schema = @Schema(allowableValues = {"asc", "desc"}))
             @RequestParam(required = false) String sortDir,
 
             @AuthenticationPrincipal User currentUser) {
         return taskService.getAllTasks(currentUser.getId(), projectId, status, search, sortBy, sortDir);
     }
 
-    @Operation(summary = "Получить Inbox",
-               description = "Возвращает задачи из Inbox текущего пользователя (is_inbox = true, status != COMPLETED)")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Список задач в Inbox",
-                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = TaskResponse.class)))),
-            @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    @GetMapping("/api/inbox")
-    public List<TaskResponse> getInbox(@AuthenticationPrincipal User currentUser) {
-        return taskService.getInbox(currentUser.getId());
-    }
-
     @Operation(summary = "Создать задачу",
                description = """
-                       Создаёт новую задачу. Правила:
-                       - Если `dueDate` в будущем → статус `BLOCKED`, задача не попадает в Inbox
+                       Создаёт новую задачу.
+                       - Если `dueDate` в будущем → статус `BLOCKED`
                        - Иначе → статус `ACTIVE`
+                       - Создание задачи в проекте активного спринта запрещено (400)
                        """)
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Задача создана",
                     content = @Content(schema = @Schema(implementation = TaskResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Некорректные данные",
+            @ApiResponse(responseCode = "400", description = "Некорректные данные или проект в активном спринте",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
@@ -97,11 +88,11 @@ public class TaskController {
     }
 
     @Operation(summary = "Обновить задачу",
-               description = "Обновляет поля задачи по ID. Логика статусов применяется так же, как при создании")
+               description = "Обновляет поля задачи по ID. Запрещено если задача в проекте активного спринта")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Задача обновлена",
                     content = @Content(schema = @Schema(implementation = TaskResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Некорректные данные",
+            @ApiResponse(responseCode = "400", description = "Некорректные данные или задача в активном спринте",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
@@ -116,9 +107,12 @@ public class TaskController {
         return taskService.updateTask(id, request, currentUser.getId());
     }
 
-    @Operation(summary = "Удалить задачу")
+    @Operation(summary = "Удалить задачу",
+               description = "Запрещено если задача в проекте активного спринта")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Задача удалена"),
+            @ApiResponse(responseCode = "400", description = "Задача в активном спринте",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Задача не найдена",
@@ -132,11 +126,38 @@ public class TaskController {
         taskService.deleteTask(id, currentUser.getId());
     }
 
+    @Operation(summary = "Взять задачу в работу (Focus mode)",
+               description = """
+                       Переводит задачу в статус `IN_PROGRESS` — обезьянка берёт задачу.
+                       Условия:
+                       - Задача должна быть в статусе `ACTIVE`
+                       - Задача должна принадлежать проекту в активном спринте
+                       - В этом спринте не должно быть другой задачи `IN_PROGRESS`
+                       """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Задача взята в работу",
+                    content = @Content(schema = @Schema(implementation = TaskResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Условия не выполнены",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Задача не найдена",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PatchMapping("/api/tasks/{id}/take")
+    public TaskResponse take(
+            @Parameter(description = "ID задачи", example = "42") @PathVariable Long id,
+            @AuthenticationPrincipal User currentUser) {
+        return taskService.takeTask(id, currentUser.getId());
+    }
+
     @Operation(summary = "Завершить задачу",
-               description = "Переводит задачу в статус `COMPLETED` и автоматически убирает из Inbox")
+               description = "Переводит задачу в статус `COMPLETED`. В режиме фокуса применяется к задаче со статусом IN_PROGRESS")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Задача завершена",
                     content = @Content(schema = @Schema(implementation = TaskResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Задача уже завершена",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Задача не найдена",
@@ -147,39 +168,5 @@ public class TaskController {
             @Parameter(description = "ID задачи", example = "42") @PathVariable Long id,
             @AuthenticationPrincipal User currentUser) {
         return taskService.completeTask(id, currentUser.getId());
-    }
-
-    @Operation(summary = "Добавить задачу в Inbox",
-               description = "Устанавливает `is_inbox = true`. Задача появится в выборке /api/inbox")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Задача добавлена в Inbox",
-                    content = @Content(schema = @Schema(implementation = TaskResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Задача не найдена",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    @PatchMapping("/api/tasks/{id}/inbox")
-    public TaskResponse addToInbox(
-            @Parameter(description = "ID задачи", example = "42") @PathVariable Long id,
-            @AuthenticationPrincipal User currentUser) {
-        return taskService.addToInbox(id, currentUser.getId());
-    }
-
-    @Operation(summary = "Убрать задачу из Inbox",
-               description = "Устанавливает `is_inbox = false`. Задача остаётся в общем списке")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Задача убрана из Inbox",
-                    content = @Content(schema = @Schema(implementation = TaskResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Задача не найдена",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    @PatchMapping("/api/tasks/{id}/uninbox")
-    public TaskResponse removeFromInbox(
-            @Parameter(description = "ID задачи", example = "42") @PathVariable Long id,
-            @AuthenticationPrincipal User currentUser) {
-        return taskService.removeFromInbox(id, currentUser.getId());
     }
 }

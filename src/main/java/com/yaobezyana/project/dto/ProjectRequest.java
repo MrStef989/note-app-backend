@@ -11,4 +11,7 @@ public class ProjectRequest {
     @NotBlank
     @Schema(description = "Название проекта", example = "Работа", requiredMode = Schema.RequiredMode.REQUIRED)
     private String title;
+
+    @Schema(description = "ID спринта для привязки проекта (null — проект без спринта, только в статусе PLANNING)", example = "1")
+    private Long sprintId;
 }

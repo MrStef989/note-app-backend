@@ -1,6 +1,5 @@
-package com.yaobezyana.task.entity;
+package com.yaobezyana.sprint.entity;
 
-import com.yaobezyana.project.entity.Project;
 import com.yaobezyana.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -11,47 +10,40 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "tasks")
+@Table(name = "sprints")
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Task {
+public class Sprint {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
     @Column(nullable = false)
     private String title;
 
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id")
-    private Project project;
+    private String goals;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private TaskStatus status = TaskStatus.ACTIVE;
+    private SprintStatus status = SprintStatus.PLANNING;
 
-    @Column(name = "is_inbox", nullable = false)
-    @Builder.Default
-    private boolean inbox = false;
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
 
-    @Column(name = "due_date")
-    private LocalDateTime dueDate;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private int position = 0;
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
