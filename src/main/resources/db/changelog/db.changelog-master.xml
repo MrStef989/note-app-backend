@@ -8,5 +8,7 @@
     <include file="db/changelog/01_init.sql"/>
     <include file="db/changelog/02_add_ip.sql"/>
     <include file="db/changelog/02_sprint.sql"/>
+    <include file="db/changelog/03_refactor.sql"/>
+    <include file="db/changelog/04_calendar.sql"/>
 
 </databaseChangeLog>

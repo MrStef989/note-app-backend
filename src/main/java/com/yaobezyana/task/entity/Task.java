@@ -1,6 +1,7 @@
 package com.yaobezyana.task.entity;
 
 import com.yaobezyana.project.entity.Project;
+import com.yaobezyana.sprint.entity.Sprint;
 import com.yaobezyana.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -37,14 +38,14 @@ public class Task {
     @JoinColumn(name = "project_id")
     private Project project;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sprint_id")
+    private Sprint sprint;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
     private TaskStatus status = TaskStatus.ACTIVE;
-
-    @Column(name = "is_inbox", nullable = false)
-    @Builder.Default
-    private boolean inbox = false;
 
     @Column(name = "due_date")
     private LocalDateTime dueDate;

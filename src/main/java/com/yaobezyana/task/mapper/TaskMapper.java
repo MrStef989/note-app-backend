@@ -10,7 +10,7 @@ public interface TaskMapper {
 
     @Mapping(source = "project.id", target = "projectId")
     @Mapping(source = "project.title", target = "projectTitle")
-    @Mapping(source = "project.sprint.id", target = "sprintId")
+    @Mapping(source = "sprint.id", target = "sprintId")
     @Mapping(source = "position", target = "position")
     TaskResponse toResponse(Task task);
 }

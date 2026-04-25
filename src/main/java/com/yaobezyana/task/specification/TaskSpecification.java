@@ -22,6 +22,10 @@ public class TaskSpecification {
                 : cb.equal(root.get("status"), status);
     }
 
+    public static Specification<Task> hasNoProject() {
+        return (root, query, cb) -> cb.isNull(root.get("project"));
+    }
+
     public static Specification<Task> titleContains(String title) {
         return (root, query, cb) -> (title == null || title.isBlank())
                 ? cb.conjunction()

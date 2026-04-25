@@ -9,28 +9,22 @@ import java.time.LocalDateTime;
 
 @Data
 @Builder
-@Schema(description = "Краткая информация о спринте (для списков и операций)")
+@Schema(description = "Краткая информация о спринте")
 public class SprintSummaryResponse {
 
     @Schema(description = "Идентификатор спринта", example = "1")
     private Long id;
 
-    @Schema(description = "Название спринта", example = "Sprint 1 — MVP")
-    private String title;
-
-    @Schema(description = "Описание спринта")
-    private String description;
-
-    @Schema(description = "Цели спринта")
-    private String goals;
+    @Schema(description = "Порядковый номер спринта пользователя", example = "3")
+    private int number;
 
     @Schema(description = "Статус спринта", example = "PLANNING")
     private SprintStatus status;
 
-    @Schema(description = "Общее количество задач в спринте", example = "12")
+    @Schema(description = "Общее количество задач в спринте", example = "5")
     private int totalTasks;
 
-    @Schema(description = "Количество завершённых задач", example = "4")
+    @Schema(description = "Количество завершённых задач", example = "2")
     private int completedTasks;
 
     @Schema(description = "Дата и время старта спринта")

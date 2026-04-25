@@ -30,23 +30,22 @@ public class TaskService {
     private final TaskMapper taskMapper;
 
     public List<TaskResponse> getAllTasks(Long userId, Long projectId, TaskStatus status,
-                                         String search, String sortBy, String sortDir) {
+                                         String search, String sortBy, String sortDir,
+                                         Boolean routine) {
         Specification<Task> spec = Specification
                 .where(TaskSpecification.hasUser(userId))
-                .and(TaskSpecification.hasProject(projectId))
                 .and(TaskSpecification.hasStatus(status))
                 .and(TaskSpecification.titleContains(search));
+
+        if (Boolean.TRUE.equals(routine)) {
+            spec = spec.and(TaskSpecification.hasNoProject());
+        } else if (projectId != null) {
+            spec = spec.and(TaskSpecification.hasProject(projectId));
+        }
 
         Sort sort = buildSort(sortBy, sortDir);
 
         return taskRepository.findAll(spec, sort)
-                .stream()
-                .map(taskMapper::toResponse)
-                .toList();
-    }
-
-    public List<TaskResponse> getInbox(Long userId) {
-        return taskRepository.findInboxTasks(userId, TaskStatus.COMPLETED)
                 .stream()
                 .map(taskMapper::toResponse)
                 .toList();
@@ -63,7 +62,6 @@ public class TaskService {
         if (request.getProjectId() != null) {
             Project project = projectRepository.findByIdAndUserId(request.getProjectId(), currentUser.getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Проект не найден: " + request.getProjectId()));
-            checkSprintNotActive(project);
             task.setProject(project);
         }
 
@@ -75,7 +73,7 @@ public class TaskService {
     @Transactional
     public TaskResponse updateTask(Long id, TaskRequest request, Long userId) {
         Task task = findOwned(id, userId);
-        checkTaskSprintNotActive(task);
+        checkTaskNotInActiveSprint(task);
 
         task.setTitle(request.getTitle());
         task.setDescription(request.getDescription());
@@ -83,7 +81,6 @@ public class TaskService {
         if (request.getProjectId() != null) {
             Project project = projectRepository.findByIdAndUserId(request.getProjectId(), userId)
                     .orElseThrow(() -> new ResourceNotFoundException("Проект не найден: " + request.getProjectId()));
-            checkSprintNotActive(project);
             task.setProject(project);
         } else {
             task.setProject(null);
@@ -97,7 +94,7 @@ public class TaskService {
     @Transactional
     public void deleteTask(Long id, Long userId) {
         Task task = findOwned(id, userId);
-        checkTaskSprintNotActive(task);
+        checkTaskNotInActiveSprint(task);
         taskRepository.delete(task);
     }
 
@@ -108,7 +105,6 @@ public class TaskService {
             throw new IllegalArgumentException("Задача уже выполнена");
         }
         task.setStatus(TaskStatus.COMPLETED);
-        task.setInbox(false);
         return taskMapper.toResponse(taskRepository.save(task));
     }
 
@@ -120,15 +116,11 @@ public class TaskService {
             throw new IllegalArgumentException("Можно взять только задачу со статусом ACTIVE");
         }
 
-        if (task.getProject() == null || task.getProject().getSprint() == null) {
-            throw new IllegalArgumentException("Задача должна принадлежать проекту в активном спринте");
+        if (task.getSprint() == null || task.getSprint().getStatus() != SprintStatus.ACTIVE) {
+            throw new IllegalArgumentException("Задача должна быть в активном спринте");
         }
 
-        if (task.getProject().getSprint().getStatus() != SprintStatus.ACTIVE) {
-            throw new IllegalArgumentException("Спринт не активен");
-        }
-
-        Long sprintId = task.getProject().getSprint().getId();
+        Long sprintId = task.getSprint().getId();
         if (taskRepository.existsBySprintIdAndStatus(sprintId, TaskStatus.IN_PROGRESS)) {
             throw new IllegalArgumentException("В этом спринте уже есть задача в работе — сначала завершите её");
         }
@@ -137,32 +129,14 @@ public class TaskService {
         return taskMapper.toResponse(taskRepository.save(task));
     }
 
-    public TaskResponse addToInbox(Long id, Long userId) {
-        Task task = findOwned(id, userId);
-        task.setInbox(true);
-        return taskMapper.toResponse(taskRepository.save(task));
-    }
-
-    public TaskResponse removeFromInbox(Long id, Long userId) {
-        Task task = findOwned(id, userId);
-        task.setInbox(false);
-        return taskMapper.toResponse(taskRepository.save(task));
-    }
-
     private Task findOwned(Long id, Long userId) {
         return taskRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Задача не найдена: " + id));
     }
 
-    private void checkSprintNotActive(Project project) {
-        if (project.getSprint() != null && project.getSprint().getStatus() == SprintStatus.ACTIVE) {
-            throw new IllegalArgumentException("Нельзя изменять задачи проекта во время активного спринта");
-        }
-    }
-
-    private void checkTaskSprintNotActive(Task task) {
-        if (task.getProject() != null) {
-            checkSprintNotActive(task.getProject());
+    private void checkTaskNotInActiveSprint(Task task) {
+        if (task.getSprint() != null && task.getSprint().getStatus() == SprintStatus.ACTIVE) {
+            throw new IllegalArgumentException("Нельзя изменять задачи во время активного спринта");
         }
     }
 
@@ -170,7 +144,6 @@ public class TaskService {
         task.setDueDate(dueDate);
         if (dueDate != null && dueDate.isAfter(LocalDateTime.now())) {
             task.setStatus(TaskStatus.BLOCKED);
-            task.setInbox(false);
         }
     }
 

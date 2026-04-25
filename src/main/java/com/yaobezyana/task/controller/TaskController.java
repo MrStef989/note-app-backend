@@ -32,7 +32,7 @@ public class TaskController {
     private final TaskService taskService;
 
     @Operation(summary = "Получить все задачи",
-               description = "Возвращает задачи текущего пользователя с поддержкой фильтрации и сортировки")
+               description = "Возвращает задачи текущего пользователя с поддержкой фильтрации и сортировки. Параметр `routine=true` возвращает только задачи без проекта (Текучка)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Список задач",
                     content = @Content(array = @ArraySchema(schema = @Schema(implementation = TaskResponse.class)))),
@@ -41,14 +41,17 @@ public class TaskController {
     })
     @GetMapping("/api/tasks")
     public List<TaskResponse> getAll(
-            @Parameter(description = "Фильтр по ID проекта", example = "3")
+            @Parameter(description = "Фильтр по ID проекта (не совместим с routine=true)", example = "3")
             @RequestParam(required = false) Long projectId,
 
-            @Parameter(description = "Фильтр по статусу задачи",
+            @Parameter(description = "Только задачи без проекта (Текучка)", example = "true")
+            @RequestParam(required = false) Boolean routine,
+
+            @Parameter(description = "Фильтр по статусу",
                     schema = @Schema(allowableValues = {"ACTIVE", "IN_PROGRESS", "COMPLETED", "BLOCKED"}))
             @RequestParam(required = false) TaskStatus status,
 
-            @Parameter(description = "Поиск по названию (без учёта регистра)", example = "отчёт")
+            @Parameter(description = "Поиск по названию", example = "отчёт")
             @RequestParam(required = false) String search,
 
             @Parameter(description = "Поле сортировки",
@@ -60,20 +63,20 @@ public class TaskController {
             @RequestParam(required = false) String sortDir,
 
             @AuthenticationPrincipal User currentUser) {
-        return taskService.getAllTasks(currentUser.getId(), projectId, status, search, sortBy, sortDir);
+        return taskService.getAllTasks(currentUser.getId(), projectId, status, search, sortBy, sortDir, routine);
     }
 
     @Operation(summary = "Создать задачу",
                description = """
                        Создаёт новую задачу.
+                       - Если `projectId` не задан — задача попадает в Текучку
                        - Если `dueDate` в будущем → статус `BLOCKED`
                        - Иначе → статус `ACTIVE`
-                       - Создание задачи в проекте активного спринта запрещено (400)
                        """)
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Задача создана",
                     content = @Content(schema = @Schema(implementation = TaskResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Некорректные данные или проект в активном спринте",
+            @ApiResponse(responseCode = "400", description = "Некорректные данные",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
@@ -88,7 +91,7 @@ public class TaskController {
     }
 
     @Operation(summary = "Обновить задачу",
-               description = "Обновляет поля задачи по ID. Запрещено если задача в проекте активного спринта")
+               description = "Обновляет поля задачи. Запрещено если задача в активном спринте")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Задача обновлена",
                     content = @Content(schema = @Schema(implementation = TaskResponse.class))),
@@ -108,7 +111,7 @@ public class TaskController {
     }
 
     @Operation(summary = "Удалить задачу",
-               description = "Запрещено если задача в проекте активного спринта")
+               description = "Запрещено если задача в активном спринте")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Задача удалена"),
             @ApiResponse(responseCode = "400", description = "Задача в активном спринте",
@@ -130,9 +133,9 @@ public class TaskController {
                description = """
                        Переводит задачу в статус `IN_PROGRESS` — обезьянка берёт задачу.
                        Условия:
-                       - Задача должна быть в статусе `ACTIVE`
-                       - Задача должна принадлежать проекту в активном спринте
-                       - В этом спринте не должно быть другой задачи `IN_PROGRESS`
+                       - Статус задачи должен быть `ACTIVE`
+                       - Задача должна быть в активном спринте
+                       - В этом спринте не должно быть другой `IN_PROGRESS` задачи
                        """)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Задача взята в работу",
@@ -152,7 +155,7 @@ public class TaskController {
     }
 
     @Operation(summary = "Завершить задачу",
-               description = "Переводит задачу в статус `COMPLETED`. В режиме фокуса применяется к задаче со статусом IN_PROGRESS")
+               description = "Переводит задачу в статус `COMPLETED`")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Задача завершена",
                     content = @Content(schema = @Schema(implementation = TaskResponse.class))),

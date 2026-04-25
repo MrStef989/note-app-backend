@@ -15,6 +15,6 @@ public class ProjectResponse {
     @Schema(description = "Название проекта", example = "Работа")
     private String title;
 
-    @Schema(description = "ID спринта, к которому привязан проект (null если не в спринте)", example = "1")
-    private Long sprintId;
+    @Schema(description = "Описание проекта", example = "Все рабочие задачи и цели")
+    private String description;
 }

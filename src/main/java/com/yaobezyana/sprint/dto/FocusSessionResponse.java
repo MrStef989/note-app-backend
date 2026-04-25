@@ -16,21 +16,21 @@ public class FocusSessionResponse {
     @Schema(description = "Идентификатор спринта", example = "1")
     private Long sprintId;
 
-    @Schema(description = "Название спринта", example = "Sprint 1 — MVP")
-    private String sprintTitle;
+    @Schema(description = "Порядковый номер спринта", example = "3")
+    private int sprintNumber;
 
     @Schema(description = "Статус спринта", example = "ACTIVE")
     private SprintStatus sprintStatus;
 
-    @Schema(description = "Общее количество задач в спринте", example = "10")
+    @Schema(description = "Общее количество задач в спринте", example = "5")
     private int totalTasks;
 
-    @Schema(description = "Количество завершённых задач", example = "3")
+    @Schema(description = "Количество завершённых задач", example = "2")
     private int completedTasks;
 
     @Schema(description = "Задача, которую обезьянка сейчас выполняет (null если не взята)", nullable = true)
     private TaskResponse inProgressTask;
 
-    @Schema(description = "Проекты с незавершёнными задачами (только ACTIVE/IN_PROGRESS)")
+    @Schema(description = "Проекты с незавершёнными задачами (ACTIVE/IN_PROGRESS). Группа с projectId=null — Текучка")
     private List<FocusProjectResponse> projects;
 }

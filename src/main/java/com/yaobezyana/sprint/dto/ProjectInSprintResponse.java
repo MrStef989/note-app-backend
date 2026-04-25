@@ -9,15 +9,15 @@ import java.util.List;
 
 @Data
 @Builder
-@Schema(description = "Проект внутри спринта с задачами")
+@Schema(description = "Группа задач в спринте (проект или Текучка)")
 public class ProjectInSprintResponse {
 
-    @Schema(description = "Идентификатор проекта", example = "2")
+    @Schema(description = "Идентификатор проекта (null = Текучка)", example = "2", nullable = true)
     private Long id;
 
-    @Schema(description = "Название проекта", example = "Backend")
+    @Schema(description = "Название проекта (null = Текучка)", example = "Backend", nullable = true)
     private String title;
 
-    @Schema(description = "Задачи проекта")
+    @Schema(description = "Задачи в данной группе")
     private List<TaskResponse> tasks;
 }

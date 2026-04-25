@@ -28,11 +28,7 @@ public class Sprint {
     private User user;
 
     @Column(nullable = false)
-    private String title;
-
-    private String description;
-
-    private String goals;
+    private int number;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

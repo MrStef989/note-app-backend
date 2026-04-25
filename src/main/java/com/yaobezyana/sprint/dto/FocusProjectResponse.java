@@ -9,15 +9,15 @@ import java.util.List;
 
 @Data
 @Builder
-@Schema(description = "Проект с незавершёнными задачами для режима фокуса")
+@Schema(description = "Группа задач для режима фокуса (проект или Текучка)")
 public class FocusProjectResponse {
 
-    @Schema(description = "Идентификатор проекта", example = "2")
+    @Schema(description = "Идентификатор проекта (null = Текучка)", example = "2", nullable = true)
     private Long projectId;
 
-    @Schema(description = "Название проекта", example = "Backend")
+    @Schema(description = "Название проекта (null = Текучка)", example = "Backend", nullable = true)
     private String projectTitle;
 
-    @Schema(description = "Незавершённые задачи проекта (ACTIVE и IN_PROGRESS)")
+    @Schema(description = "Незавершённые задачи (ACTIVE и IN_PROGRESS)")
     private List<TaskResponse> tasks;
 }

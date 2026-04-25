@@ -1,6 +1,5 @@
 package com.yaobezyana.project.entity;
 
-import com.yaobezyana.sprint.entity.Sprint;
 import com.yaobezyana.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -21,11 +20,9 @@ public class Project {
     @Column(nullable = false)
     private String title;
 
+    private String description;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sprint_id")
-    private Sprint sprint;
 }

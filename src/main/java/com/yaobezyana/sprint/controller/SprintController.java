@@ -13,7 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,10 +29,8 @@ public class SprintController {
 
     private final SprintService sprintService;
 
-    // ─── Planner mode ────────────────────────────────────────────────────────
-
-    @Operation(summary = "Получить список спринтов",
-               description = "Возвращает все спринты текущего пользователя, отсортированные по дате создания (новые первые)")
+    @Operation(summary = "История спринтов",
+               description = "Возвращает все спринты пользователя (включая завершённые), отсортированные по номеру (новые первые)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Список спринтов",
                     content = @Content(array = @ArraySchema(schema = @Schema(implementation = SprintSummaryResponse.class)))),
@@ -45,10 +42,23 @@ public class SprintController {
         return sprintService.getSprints(currentUser.getId());
     }
 
-    @Operation(summary = "Получить спринт с проектами и задачами",
-               description = "Возвращает полную структуру спринта: метаданные, все проекты и все задачи в них")
+    @Operation(summary = "Текущий спринт",
+               description = "Возвращает текущий спринт (PLANNING или ACTIVE) с задачами сгруппированными по проектам. Авто-создаёт спринт если его нет.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Детали спринта",
+            @ApiResponse(responseCode = "200", description = "Текущий спринт",
+                    content = @Content(schema = @Schema(implementation = SprintDetailResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping("/current")
+    public SprintDetailResponse getCurrent(@AuthenticationPrincipal User currentUser) {
+        return sprintService.getCurrentSprintDetail(currentUser.getId());
+    }
+
+    @Operation(summary = "Спринт по ID",
+               description = "Возвращает спринт по ID (для истории)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Спринт",
                     content = @Content(schema = @Schema(implementation = SprintDetailResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
@@ -56,75 +66,86 @@ public class SprintController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping("/{id}")
-    public SprintDetailResponse getDetail(
+    public SprintDetailResponse getById(
             @Parameter(description = "ID спринта", example = "1") @PathVariable Long id,
             @AuthenticationPrincipal User currentUser) {
         return sprintService.getSprintDetail(id, currentUser.getId());
     }
 
-    @Operation(summary = "Создать спринт",
-               description = "Создаёт новый спринт в статусе PLANNING. Добавьте проекты и задачи перед запуском")
+    @Operation(summary = "Доступные задачи для спринта",
+               description = """
+                       Возвращает задачи которые можно добавить в текущий спринт, сгруппированные по проектам.
+                       Исключены:
+                       - Уже добавленные в спринт
+                       - Заблокированные в календаре
+                       - Статус BLOCKED (по dueDate), COMPLETED, IN_PROGRESS
+
+                       Поле `sprintTaskAdded` показывает что из данного проекта уже добавлена задача (лимит исчерпан).
+                       """)
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Спринт создан",
-                    content = @Content(schema = @Schema(implementation = SprintSummaryResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Некорректные данные",
+            @ApiResponse(responseCode = "200", description = "Список доступных задач",
+                    content = @Content(schema = @Schema(implementation = AvailableTasksResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Нет спринта в статусе PLANNING",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public SprintSummaryResponse create(@Valid @RequestBody SprintRequest request,
-                                        @AuthenticationPrincipal User currentUser) {
-        return sprintService.createSprint(request, currentUser);
+    @GetMapping("/current/available-tasks")
+    public AvailableTasksResponse getAvailableTasks(@AuthenticationPrincipal User currentUser) {
+        return sprintService.getAvailableTasks(currentUser.getId());
     }
 
-    @Operation(summary = "Обновить спринт",
-               description = "Обновляет метаданные спринта. Доступно только в статусе PLANNING")
+    @Operation(summary = "Добавить задачу в текущий спринт",
+               description = """
+                       Добавляет задачу в текущий спринт (только в статусе PLANNING).
+                       Правила:
+                       - Из каждого проекта можно добавить только 1 задачу
+                       - Из Текучки (задачи без проекта) тоже только 1 задачу
+                       - Задача уже не должна быть в спринте
+                       """)
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Спринт обновлён",
+            @ApiResponse(responseCode = "200", description = "Задача добавлена, возвращает обновлённый спринт",
                     content = @Content(schema = @Schema(implementation = SprintSummaryResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Некорректные данные или спринт не в статусе PLANNING",
+            @ApiResponse(responseCode = "400", description = "Нарушение правила 1 задача / проект",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Спринт не найден",
+            @ApiResponse(responseCode = "404", description = "Задача не найдена",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PutMapping("/{id}")
-    public SprintSummaryResponse update(
-            @Parameter(description = "ID спринта", example = "1") @PathVariable Long id,
-            @Valid @RequestBody SprintRequest request,
+    @PostMapping("/current/tasks/{taskId}")
+    public SprintSummaryResponse addTask(
+            @Parameter(description = "ID задачи", example = "42") @PathVariable Long taskId,
             @AuthenticationPrincipal User currentUser) {
-        return sprintService.updateSprint(id, request, currentUser.getId());
+        return sprintService.addTaskToSprint(taskId, currentUser.getId());
     }
 
-    @Operation(summary = "Удалить спринт",
-               description = "Удаляет спринт. Доступно только в статусе PLANNING. Проекты спринта не удаляются, у них обнуляется sprintId")
+    @Operation(summary = "Убрать задачу из текущего спринта",
+               description = "Убирает задачу из текущего спринта (только в статусе PLANNING)")
     @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Спринт удалён"),
-            @ApiResponse(responseCode = "400", description = "Спринт не в статусе PLANNING",
+            @ApiResponse(responseCode = "204", description = "Задача убрана из спринта"),
+            @ApiResponse(responseCode = "400", description = "Спринт не в статусе PLANNING или задача не в спринте",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Спринт не найден",
+            @ApiResponse(responseCode = "404", description = "Задача не найдена",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/current/tasks/{taskId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(
-            @Parameter(description = "ID спринта", example = "1") @PathVariable Long id,
+    public void removeTask(
+            @Parameter(description = "ID задачи", example = "42") @PathVariable Long taskId,
             @AuthenticationPrincipal User currentUser) {
-        sprintService.deleteSprint(id, currentUser.getId());
+        sprintService.removeTaskFromSprint(taskId, currentUser.getId());
     }
 
     @Operation(summary = "Запустить спринт",
                description = """
-                       Переводит спринт в статус ACTIVE — включается режим фокуса.
+                       Переводит текущий спринт в статус ACTIVE — включается режим фокуса.
                        Условия:
-                       - Статус должен быть PLANNING
-                       - Спринт должен содержать хотя бы один проект с задачами
-                       - У пользователя не должно быть другого активного спринта
+                       - В спринте должна быть хотя бы одна задача
+                       - Инбокс должен быть пустым (все заметки обработаны)
+                       - Если в Текучке есть задачи — одна из них обязана быть в спринте
                        """)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Спринт запущен",
@@ -132,87 +153,50 @@ public class SprintController {
             @ApiResponse(responseCode = "400", description = "Условия запуска не выполнены",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Спринт не найден",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PatchMapping("/{id}/start")
-    public SprintSummaryResponse start(
-            @Parameter(description = "ID спринта", example = "1") @PathVariable Long id,
-            @AuthenticationPrincipal User currentUser) {
-        return sprintService.startSprint(id, currentUser.getId());
+    @PatchMapping("/current/start")
+    public SprintSummaryResponse start(@AuthenticationPrincipal User currentUser) {
+        return sprintService.startSprint(currentUser.getId());
     }
 
     @Operation(summary = "Завершить спринт",
                description = """
-                       Переводит спринт в статус COMPLETED.
-                       Условия:
-                       - Статус должен быть ACTIVE
-                       - Все задачи спринта должны иметь статус COMPLETED
+                       Завершает активный спринт. Автоматически создаёт следующий спринт.
+                       Условие: все задачи спринта должны иметь статус COMPLETED.
                        """)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Спринт завершён",
                     content = @Content(schema = @Schema(implementation = SprintSummaryResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Не все задачи выполнены или спринт не активен",
+            @ApiResponse(responseCode = "400", description = "Не все задачи выполнены или нет активного спринта",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Спринт не найден",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @PatchMapping("/{id}/complete")
-    public SprintSummaryResponse complete(
-            @Parameter(description = "ID спринта", example = "1") @PathVariable Long id,
-            @AuthenticationPrincipal User currentUser) {
-        return sprintService.completeSprint(id, currentUser.getId());
+    @PatchMapping("/current/complete")
+    public SprintSummaryResponse complete(@AuthenticationPrincipal User currentUser) {
+        return sprintService.completeSprint(currentUser.getId());
     }
 
-    // ─── Focus mode ──────────────────────────────────────────────────────────
-
-    @Operation(summary = "Получить сессию фокуса",
+    @Operation(summary = "Сессия фокуса",
                description = """
-                       Возвращает состояние фокус-сессии для обезьянки:
+                       Возвращает состояние фокус-сессии:
                        - Текущая задача в работе (`inProgressTask`, null если не взята)
                        - Прогресс (выполнено/всего)
-                       - Все незавершённые задачи по проектам (только ACTIVE и IN_PROGRESS)
+                       - Все незавершённые задачи по группам (проект или Текучка — группа с projectId=null)
 
-                       Доступен только если спринт в статусе ACTIVE.
+                       Доступен только если есть ACTIVE спринт.
                        """)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Состояние фокус-сессии",
                     content = @Content(schema = @Schema(implementation = FocusSessionResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Спринт не активен",
+            @ApiResponse(responseCode = "400", description = "Нет активного спринта",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Спринт не найден",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    @GetMapping("/{id}/tasks")
-    public FocusSessionResponse getFocusSession(
-            @Parameter(description = "ID спринта", example = "1") @PathVariable Long id,
-            @AuthenticationPrincipal User currentUser) {
-        return sprintService.getFocusSession(id, currentUser.getId());
-    }
-
-    @Operation(summary = "Переупорядочить задачи в проекте",
-               description = "Задаёт порядок задач (поле position) для отображения в режиме планирования. Доступно только в статусе PLANNING")
-    @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Порядок сохранён"),
-            @ApiResponse(responseCode = "400", description = "Некорректные данные или спринт не в статусе PLANNING",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Не аутентифицирован",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Спринт или проект не найдены",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    @PatchMapping("/{sprintId}/projects/{projectId}/tasks/reorder")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void reorderTasks(
-            @Parameter(description = "ID спринта", example = "1") @PathVariable Long sprintId,
-            @Parameter(description = "ID проекта", example = "2") @PathVariable Long projectId,
-            @Valid @RequestBody ReorderRequest request,
-            @AuthenticationPrincipal User currentUser) {
-        sprintService.reorderTasks(sprintId, projectId, request.getTaskIds(), currentUser.getId());
+    @GetMapping("/current/focus")
+    public FocusSessionResponse getFocusSession(@AuthenticationPrincipal User currentUser) {
+        return sprintService.getFocusSession(currentUser.getId());
     }
 }

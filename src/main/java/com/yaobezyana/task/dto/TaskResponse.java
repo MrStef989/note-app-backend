@@ -21,13 +21,13 @@ public class TaskResponse {
     @Schema(description = "Описание задачи", example = "Подготовить квартальный отчёт по продажам")
     private String description;
 
-    @Schema(description = "ID проекта (null — задача без проекта)", example = "3")
+    @Schema(description = "ID проекта (null — Текучка)", example = "3")
     private Long projectId;
 
-    @Schema(description = "Название проекта", example = "Работа")
+    @Schema(description = "Название проекта (null — Текучка)", example = "Работа")
     private String projectTitle;
 
-    @Schema(description = "ID спринта, к которому относится проект задачи (null если не в спринте)", example = "1")
+    @Schema(description = "ID спринта (null — задача не добавлена в спринт)", example = "1")
     private Long sprintId;
 
     @Schema(description = "Статус задачи", example = "ACTIVE")

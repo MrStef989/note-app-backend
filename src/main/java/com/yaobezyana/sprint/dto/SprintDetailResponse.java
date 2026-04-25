@@ -10,31 +10,25 @@ import java.util.List;
 
 @Data
 @Builder
-@Schema(description = "Полная информация о спринте: метаданные + проекты + задачи")
+@Schema(description = "Полная информация о спринте: метаданные + задачи сгруппированные по проектам")
 public class SprintDetailResponse {
 
     @Schema(description = "Идентификатор спринта", example = "1")
     private Long id;
 
-    @Schema(description = "Название спринта", example = "Sprint 1 — MVP")
-    private String title;
-
-    @Schema(description = "Описание спринта")
-    private String description;
-
-    @Schema(description = "Цели спринта")
-    private String goals;
+    @Schema(description = "Порядковый номер спринта", example = "3")
+    private int number;
 
     @Schema(description = "Статус спринта", example = "PLANNING")
     private SprintStatus status;
 
-    @Schema(description = "Общее количество задач", example = "12")
+    @Schema(description = "Общее количество задач", example = "5")
     private int totalTasks;
 
-    @Schema(description = "Завершённых задач", example = "4")
+    @Schema(description = "Завершённых задач", example = "2")
     private int completedTasks;
 
-    @Schema(description = "Проекты со своими задачами")
+    @Schema(description = "Задачи сгруппированные по проектам (null-проект = Текучка)")
     private List<ProjectInSprintResponse> projects;
 
     @Schema(description = "Дата и время старта спринта")

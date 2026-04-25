@@ -4,6 +4,7 @@ import com.yaobezyana.auth.dto.AuthResponse;
 import com.yaobezyana.auth.dto.LoginRequest;
 import com.yaobezyana.auth.dto.RegisterRequest;
 import com.yaobezyana.auth.security.JwtTokenProvider;
+import com.yaobezyana.sprint.service.SprintService;
 import com.yaobezyana.user.entity.User;
 import com.yaobezyana.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -21,7 +23,9 @@ public class AuthService implements UserDetailsService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final SprintService sprintService;
 
+    @Transactional
     public AuthResponse register(RegisterRequest request, String ipAddress) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email already in use");
@@ -33,7 +37,8 @@ public class AuthService implements UserDetailsService {
                 .ipAddress(ipAddress)
                 .build();
 
-        userRepository.save(user);
+        User saved = userRepository.save(user);
+        sprintService.createNewSprintForUser(saved);
 
         return AuthResponse.builder()
                 .token(jwtTokenProvider.generateToken(user.getEmail()))

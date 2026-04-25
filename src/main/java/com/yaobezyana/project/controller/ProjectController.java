@@ -45,7 +45,7 @@ public class ProjectController {
     }
 
     @Operation(summary = "Создать проект",
-               description = "Создаёт новый проект для текущего пользователя")
+               description = "Создаёт новый проект. Проекты существуют независимо от спринтов")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Проект создан",
                     content = @Content(schema = @Schema(implementation = ProjectResponse.class))),
@@ -62,7 +62,7 @@ public class ProjectController {
     }
 
     @Operation(summary = "Обновить проект",
-               description = "Обновляет название проекта по ID")
+               description = "Обновляет название и описание проекта по ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Проект обновлён",
                     content = @Content(schema = @Schema(implementation = ProjectResponse.class))),
@@ -82,7 +82,7 @@ public class ProjectController {
     }
 
     @Operation(summary = "Удалить проект",
-               description = "Удаляет проект. Задачи проекта сохраняются без привязки к проекту (projectId = null)")
+               description = "Удаляет проект. Задачи переходят в Текучку (projectId = null)")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Проект удалён"),
             @ApiResponse(responseCode = "401", description = "Не аутентифицирован",

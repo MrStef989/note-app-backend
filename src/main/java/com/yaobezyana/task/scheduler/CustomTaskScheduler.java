@@ -19,10 +19,6 @@ public class CustomTaskScheduler {
 
     private final TaskRepository taskRepository;
 
-    /**
-     * Каждый час активирует заблокированные задачи, у которых наступил due_date.
-     * Задача переходит в статус ACTIVE и автоматически добавляется в Inbox.
-     */
     @Scheduled(fixedRate = 3_600_000)
     @Transactional
     public void activateBlockedTasks() {
@@ -33,12 +29,7 @@ public class CustomTaskScheduler {
         }
 
         log.info("Activating {} blocked tasks", dueTasks.size());
-
-        dueTasks.forEach(task -> {
-            task.setStatus(TaskStatus.ACTIVE);
-            task.setInbox(true);
-        });
-
+        dueTasks.forEach(task -> task.setStatus(TaskStatus.ACTIVE));
         taskRepository.saveAll(dueTasks);
     }
 }
