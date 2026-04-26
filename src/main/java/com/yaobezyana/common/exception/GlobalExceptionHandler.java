@@ -1,5 +1,6 @@
 package com.yaobezyana.common.exception;
 
+import com.yaobezyana.ai.exception.AiUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -12,6 +13,12 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AiUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleAiUnavailable(AiUnavailableException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(error(503, ex.getMessage()));
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {

@@ -27,6 +27,9 @@ public class SprintSummaryResponse {
     @Schema(description = "Количество завершённых задач", example = "2")
     private int completedTasks;
 
+    @Schema(description = "Резюме спринта, сгенерированное ИИ (null для незавершённых)", nullable = true)
+    private String summary;
+
     @Schema(description = "Дата и время старта спринта")
     private LocalDateTime startedAt;
 

@@ -1,5 +1,6 @@
 package com.yaobezyana.inbox.controller;
 
+import com.yaobezyana.ai.dto.InboxSuggestionResponse;
 import com.yaobezyana.common.exception.ErrorResponse;
 import com.yaobezyana.inbox.dto.*;
 import com.yaobezyana.inbox.service.InboxService;
@@ -102,5 +103,26 @@ public class InboxController {
             @Valid @RequestBody ConvertNoteRequest request,
             @AuthenticationPrincipal User currentUser) {
         return inboxService.convertNote(id, request, currentUser);
+    }
+
+    @Operation(summary = "ИИ: предложение по конвертации заметки",
+               description = """
+                       Анализирует текст заметки и предлагает: тип конвертации (PROJECT/TASK/ROUTINE),
+                       заголовок и проект. Не изменяет данные — финальный выбор остаётся за пользователем.
+                       Требует запущенного Ollama.
+                       """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Предложение ИИ",
+                    content = @Content(schema = @Schema(implementation = InboxSuggestionResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Заметка не найдена",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "503", description = "Ollama недоступна",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping("/{id}/suggest")
+    public InboxSuggestionResponse suggest(
+            @Parameter(description = "ID заметки", example = "1") @PathVariable Long id,
+            @AuthenticationPrincipal User currentUser) {
+        return inboxService.suggestConversion(id, currentUser.getId());
     }
 }

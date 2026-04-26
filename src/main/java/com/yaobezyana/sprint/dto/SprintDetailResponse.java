@@ -28,6 +28,9 @@ public class SprintDetailResponse {
     @Schema(description = "Завершённых задач", example = "2")
     private int completedTasks;
 
+    @Schema(description = "Резюме спринта, сгенерированное ИИ (null для незавершённых)", nullable = true)
+    private String summary;
+
     @Schema(description = "Задачи сгруппированные по проектам (null-проект = Текучка)")
     private List<ProjectInSprintResponse> projects;
 

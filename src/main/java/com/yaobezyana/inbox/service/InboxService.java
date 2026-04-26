@@ -1,5 +1,7 @@
 package com.yaobezyana.inbox.service;
 
+import com.yaobezyana.ai.dto.InboxSuggestionResponse;
+import com.yaobezyana.ai.service.AiService;
 import com.yaobezyana.common.exception.ResourceNotFoundException;
 import com.yaobezyana.inbox.dto.*;
 import com.yaobezyana.inbox.entity.InboxNote;
@@ -24,6 +26,7 @@ public class InboxService {
     private final ProjectRepository projectRepository;
     private final TaskRepository taskRepository;
     private final InboxMapper inboxMapper;
+    private final AiService aiService;
 
     public List<InboxNoteResponse> getNotes(Long userId) {
         return inboxNoteRepository.findAllByUserIdOrderByCreatedAtAsc(userId)
@@ -39,6 +42,16 @@ public class InboxService {
                 .content(request.getContent())
                 .build();
         return inboxMapper.toResponse(inboxNoteRepository.save(note));
+    }
+
+    @Transactional(readOnly = true)
+    public InboxSuggestionResponse suggestConversion(Long id, Long userId) {
+        InboxNote note = inboxNoteRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Заметка не найдена: " + id));
+        List<AiService.ProjectInfo> projects = projectRepository.findAllByUserId(userId).stream()
+                .map(p -> new AiService.ProjectInfo(p.getId(), p.getTitle()))
+                .toList();
+        return aiService.suggestInboxConversion(note.getContent(), projects);
     }
 
     @Transactional

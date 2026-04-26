@@ -1,5 +1,6 @@
 package com.yaobezyana.sprint.controller;
 
+import com.yaobezyana.ai.dto.SprintSuggestionsResponse;
 import com.yaobezyana.common.exception.ErrorResponse;
 import com.yaobezyana.sprint.dto.*;
 import com.yaobezyana.sprint.service.SprintService;
@@ -198,5 +199,24 @@ public class SprintController {
     @GetMapping("/current/focus")
     public FocusSessionResponse getFocusSession(@AuthenticationPrincipal User currentUser) {
         return sprintService.getFocusSession(currentUser.getId());
+    }
+
+    @Operation(summary = "ИИ: предложение задач для спринта",
+               description = """
+                       Анализирует доступные задачи и предлагает по одной из каждого проекта/Текучки.
+                       Только для спринта в статусе PLANNING. Предложение не изменяет данные — финальный выбор за пользователем.
+                       Требует запущенного Ollama.
+                       """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Предложения ИИ по задачам",
+                    content = @Content(schema = @Schema(implementation = SprintSuggestionsResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Нет спринта PLANNING или все группы уже заполнены",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "503", description = "Ollama недоступна",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping("/current/suggest-tasks")
+    public SprintSuggestionsResponse suggestTasks(@AuthenticationPrincipal User currentUser) {
+        return sprintService.suggestTasks(currentUser.getId());
     }
 }

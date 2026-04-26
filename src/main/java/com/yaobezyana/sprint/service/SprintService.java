@@ -1,5 +1,7 @@
 package com.yaobezyana.sprint.service;
 
+import com.yaobezyana.ai.dto.SprintSuggestionsResponse;
+import com.yaobezyana.ai.service.AiService;
 import com.yaobezyana.calendar.repository.CalendarEntryRepository;
 import com.yaobezyana.common.exception.ResourceNotFoundException;
 import com.yaobezyana.inbox.repository.InboxNoteRepository;
@@ -37,6 +39,7 @@ public class SprintService {
     private final CalendarEntryRepository calendarEntryRepository;
     private final SprintMapper sprintMapper;
     private final TaskMapper taskMapper;
+    private final AiService aiService;
 
     public List<SprintSummaryResponse> getSprints(Long userId) {
         return sprintRepository.findAllByUserIdOrderByNumberDesc(userId).stream()
@@ -164,6 +167,14 @@ public class SprintService {
             throw new IllegalArgumentException("Все задачи спринта должны быть выполнены перед завершением");
         }
 
+        List<AiService.CompletedTaskInfo> taskInfos = taskRepository
+                .findFocusTasks(sprint.getId(), List.of(TaskStatus.COMPLETED)).stream()
+                .map(t -> new AiService.CompletedTaskInfo(
+                        t.getTitle(),
+                        t.getProject() != null ? t.getProject().getTitle() : null))
+                .toList();
+        sprint.setSummary(aiService.generateSprintSummary(taskInfos, sprint.getNumber()));
+
         sprint.setStatus(SprintStatus.COMPLETED);
         sprint.setCompletedAt(LocalDateTime.now());
         sprintRepository.save(sprint);
@@ -174,6 +185,18 @@ public class SprintService {
         response.setTotalTasks((int) totalTasks);
         response.setCompletedTasks((int) completedTasks);
         return response;
+    }
+
+    @Transactional(readOnly = true)
+    public SprintSuggestionsResponse suggestTasks(Long userId) {
+        AvailableTasksResponse available = getAvailableTasks(userId);
+        List<AvailableProjectGroup> pending = available.getGroups().stream()
+                .filter(g -> !g.isSprintTaskAdded() && !g.getTasks().isEmpty())
+                .toList();
+        if (pending.isEmpty()) {
+            throw new IllegalArgumentException("Все группы проектов уже имеют задачу в спринте или нет доступных задач");
+        }
+        return aiService.suggestSprintTasks(pending);
     }
 
     @Transactional(readOnly = true)
@@ -311,6 +334,7 @@ public class SprintService {
                 .id(sprint.getId())
                 .number(sprint.getNumber())
                 .status(sprint.getStatus())
+                .summary(sprint.getSummary())
                 .totalTasks((int) totalTasks)
                 .completedTasks((int) completedTasks)
                 .projects(projectResponses)

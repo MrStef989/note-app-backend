@@ -41,6 +41,9 @@ public class Sprint {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String summary;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

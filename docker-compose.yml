@@ -10,6 +10,7 @@ services:
       JWT_SECRET: change-this-secret-in-production-min-32-chars
       JWT_EXPIRATION: 86400000
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      OLLAMA_URL: http://ollama:11434
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,6 +38,16 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: on-failure
+    # После первого запуска выполни: docker exec <container_id> ollama pull llama3.2:3b
+    # Модель кэшируется в volume ollama_data — повторно скачивать не нужно
+
   pgadmin:
     image: dpage/pgadmin4:latest
     environment:
@@ -56,3 +67,4 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
+  ollama_data:

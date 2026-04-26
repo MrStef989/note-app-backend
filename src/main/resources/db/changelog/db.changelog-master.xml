@@ -10,5 +10,6 @@
     <include file="db/changelog/02_sprint.sql"/>
     <include file="db/changelog/03_refactor.sql"/>
     <include file="db/changelog/04_calendar.sql"/>
+    <include file="db/changelog/05_ai_sprint_summary.sql"/>
 
 </databaseChangeLog>
