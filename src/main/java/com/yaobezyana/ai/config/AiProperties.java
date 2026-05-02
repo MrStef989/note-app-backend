@@ -6,9 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "ai.ollama")
-public class OllamaProperties {
-    private String baseUrl = "http://localhost:11434";
-    private String model = "llama3.2:3b";
+@ConfigurationProperties(prefix = "ai.groq")
+public class AiProperties {
+    private String apiKey = "";
+    private String model = "llama-3.1-8b-instant";
     private boolean enabled = true;
 }

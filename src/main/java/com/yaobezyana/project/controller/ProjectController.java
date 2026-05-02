@@ -1,5 +1,7 @@
 package com.yaobezyana.project.controller;
 
+import com.yaobezyana.ai.dto.AutocompleteRequest;
+import com.yaobezyana.ai.dto.AutocompleteResponse;
 import com.yaobezyana.common.exception.ErrorResponse;
 import com.yaobezyana.project.dto.ProjectRequest;
 import com.yaobezyana.project.dto.ProjectResponse;
@@ -96,5 +98,30 @@ public class ProjectController {
             @Parameter(description = "ID проекта", example = "1") @PathVariable Long id,
             @AuthenticationPrincipal User currentUser) {
         projectService.deleteProject(id, currentUser.getId());
+    }
+
+    @Operation(summary = "[ИИ] Автодополнение описания проекта",
+               description = """
+                       Принимает текст, который пользователь уже написал в описании проекта,
+                       и предлагает продолжение (1-2 предложения).
+                       Данные не изменяются — пользователь принимает или игнорирует предложение.
+                       Работает через Groq API (бесплатно). Требует GROQ_API_KEY.
+                       """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Предлагаемое продолжение текста",
+                    content = @Content(schema = @Schema(implementation = AutocompleteResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Некорректные данные",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Проект не найден",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "503", description = "AI сервис недоступен",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping("/{id}/autocomplete")
+    public AutocompleteResponse autocomplete(
+            @Parameter(description = "ID проекта", example = "1") @PathVariable Long id,
+            @Valid @RequestBody AutocompleteRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        return projectService.autocomplete(id, request.getCurrentText(), currentUser.getId());
     }
 }

@@ -167,14 +167,6 @@ public class SprintService {
             throw new IllegalArgumentException("Все задачи спринта должны быть выполнены перед завершением");
         }
 
-        List<AiService.CompletedTaskInfo> taskInfos = taskRepository
-                .findFocusTasks(sprint.getId(), List.of(TaskStatus.COMPLETED)).stream()
-                .map(t -> new AiService.CompletedTaskInfo(
-                        t.getTitle(),
-                        t.getProject() != null ? t.getProject().getTitle() : null))
-                .toList();
-        sprint.setSummary(aiService.generateSprintSummary(taskInfos, sprint.getNumber()));
-
         sprint.setStatus(SprintStatus.COMPLETED);
         sprint.setCompletedAt(LocalDateTime.now());
         sprintRepository.save(sprint);

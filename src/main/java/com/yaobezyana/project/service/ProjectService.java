@@ -1,5 +1,7 @@
 package com.yaobezyana.project.service;
 
+import com.yaobezyana.ai.dto.AutocompleteResponse;
+import com.yaobezyana.ai.service.AiService;
 import com.yaobezyana.common.exception.ResourceNotFoundException;
 import com.yaobezyana.project.dto.ProjectRequest;
 import com.yaobezyana.project.dto.ProjectResponse;
@@ -21,6 +23,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final TaskRepository taskRepository;
     private final ProjectMapper projectMapper;
+    private final AiService aiService;
 
     public List<ProjectResponse> getAllProjects(Long userId) {
         return projectRepository.findAllByUserId(userId)
@@ -54,5 +57,12 @@ public class ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException("Проект не найден: " + id));
         taskRepository.detachTasksFromProject(id);
         projectRepository.delete(project);
+    }
+
+    @Transactional(readOnly = true)
+    public AutocompleteResponse autocomplete(Long id, String currentText, Long userId) {
+        Project project = projectRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Проект не найден: " + id));
+        return aiService.autocompleteProjectText(project.getTitle(), currentText);
     }
 }

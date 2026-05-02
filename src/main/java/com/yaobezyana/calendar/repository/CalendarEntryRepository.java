@@ -10,7 +10,8 @@ import java.util.Optional;
 
 public interface CalendarEntryRepository extends JpaRepository<CalendarEntry, Long> {
 
-    List<CalendarEntry> findAllByUserIdOrderByDateAsc(Long userId);
+    @Query("SELECT c FROM CalendarEntry c WHERE c.user.id = :userId ORDER BY CASE WHEN c.date IS NULL THEN 1 ELSE 0 END ASC, c.date ASC")
+    List<CalendarEntry> findAllByUserIdOrderByDateAsc(@Param("userId") Long userId);
 
     Optional<CalendarEntry> findByIdAndUserId(Long id, Long userId);
 

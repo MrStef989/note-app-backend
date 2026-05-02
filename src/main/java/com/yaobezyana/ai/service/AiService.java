@@ -1,14 +1,12 @@
 package com.yaobezyana.ai.service;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yaobezyana.ai.config.OllamaProperties;
-import com.yaobezyana.ai.dto.InboxSuggestionResponse;
-import com.yaobezyana.ai.dto.SprintSuggestionsResponse;
-import com.yaobezyana.ai.dto.SprintTaskSuggestion;
+import com.yaobezyana.ai.config.AiProperties;
+import com.yaobezyana.ai.dto.*;
 import com.yaobezyana.ai.exception.AiUnavailableException;
-import com.yaobezyana.inbox.dto.ConversionType;
 import com.yaobezyana.sprint.dto.AvailableProjectGroup;
 import com.yaobezyana.task.dto.TaskResponse;
 import lombok.RequiredArgsConstructor;
@@ -25,28 +23,41 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiService {
 
-    private final RestClient ollamaRestClient;
-    private final OllamaProperties ollamaProperties;
+    private final RestClient aiRestClient;
+    private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
 
-    // ─── Variant 1: Smart Inbox Suggestion ───────────────────────────────────
+    // ─── Variant 1: Smart Inbox Actions ──────────────────────────────────────
 
-    public InboxSuggestionResponse suggestInboxConversion(String noteContent, List<ProjectInfo> projects) {
+    public InboxActionSuggestionsResponse suggestInboxActions(String noteContent, List<ProjectInfo> projects) {
         assertEnabled();
-        String json = callOllama(buildInboxPrompt(noteContent, projects));
+        String json = callGroq(buildInboxActionsPrompt(noteContent, projects));
         try {
             JsonNode root = objectMapper.readTree(json);
-            ConversionType type = ConversionType.valueOf(root.path("type").asText("ROUTINE"));
-            Long projectId = root.path("suggestedProjectId").isNull()
-                    ? null : root.path("suggestedProjectId").asLong();
-            return InboxSuggestionResponse.builder()
-                    .type(type)
-                    .suggestedTitle(root.path("suggestedTitle").asText())
-                    .suggestedProjectId(projectId)
-                    .reason(root.path("reason").asText())
-                    .build();
-        } catch (JsonProcessingException | IllegalArgumentException e) {
-            log.error("Failed to parse AI inbox suggestion: {}", json, e);
+            JsonNode actionsNode = root.path("actions");
+            List<InboxActionSuggestion> actions = new ArrayList<>();
+            if (actionsNode.isArray()) {
+                for (JsonNode node : actionsNode) {
+                    InboxAction action;
+                    try {
+                        action = InboxAction.valueOf(node.path("action").asText("CREATE_TASK"));
+                    } catch (IllegalArgumentException e) {
+                        action = InboxAction.CREATE_TASK;
+                    }
+                    Long projectId = node.path("projectId").isNull() ? null : node.path("projectId").asLong();
+                    String projectTitle = node.path("projectTitle").isNull() ? null : node.path("projectTitle").asText(null);
+                    actions.add(InboxActionSuggestion.builder()
+                            .action(action)
+                            .title(node.path("title").asText(""))
+                            .projectId(projectId)
+                            .projectTitle(projectTitle)
+                            .reason(node.path("reason").asText(""))
+                            .build());
+                }
+            }
+            return InboxActionSuggestionsResponse.builder().actions(actions).build();
+        } catch (JsonProcessingException e) {
+            log.error("Failed to parse AI inbox actions: {}", json, e);
             throw new AiUnavailableException("ИИ вернул некорректный ответ, попробуйте ещё раз");
         }
     }
@@ -55,7 +66,7 @@ public class AiService {
 
     public SprintSuggestionsResponse suggestSprintTasks(List<AvailableProjectGroup> groups) {
         assertEnabled();
-        String json = callOllama(buildSprintTasksPrompt(groups));
+        String json = callGroq(buildSprintTasksPrompt(groups));
         try {
             JsonNode root = objectMapper.readTree(json);
             JsonNode suggestionsNode = root.path("suggestions");
@@ -82,25 +93,27 @@ public class AiService {
         }
     }
 
-    // ─── Variant 3: Sprint Completion Summary ────────────────────────────────
+    // ─── Variant 3: Project Description Autocomplete ─────────────────────────
 
-    public String generateSprintSummary(List<CompletedTaskInfo> tasks, int sprintNumber) {
-        if (!ollamaProperties.isEnabled()) return null;
+    public AutocompleteResponse autocompleteProjectText(String projectTitle, String currentText) {
+        assertEnabled();
+        String json = callGroq(buildAutocompletePrompt(projectTitle, currentText));
         try {
-            String json = callOllama(buildSprintSummaryPrompt(tasks, sprintNumber));
             JsonNode root = objectMapper.readTree(json);
-            return root.path("summary").asText(null);
-        } catch (Exception e) {
-            log.warn("Sprint #{} summary generation failed: {}", sprintNumber, e.getMessage());
-            return null;
+            return AutocompleteResponse.builder()
+                    .suggestion(root.path("suggestion").asText(""))
+                    .build();
+        } catch (JsonProcessingException e) {
+            log.error("Failed to parse AI autocomplete: {}", json, e);
+            throw new AiUnavailableException("ИИ вернул некорректный ответ");
         }
     }
 
     // ─── Prompt builders ─────────────────────────────────────────────────────
 
-    private String buildInboxPrompt(String noteContent, List<ProjectInfo> projects) {
+    private String buildInboxActionsPrompt(String noteContent, List<ProjectInfo> projects) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Проанализируй заметку и предложи конвертацию.\n\n");
+        sb.append("Проанализируй заметку и предложи 2-3 действия для её обработки.\n\n");
         sb.append("Заметка: \"").append(noteContent).append("\"\n\n");
         if (!projects.isEmpty()) {
             sb.append("Проекты пользователя:\n");
@@ -112,15 +125,18 @@ public class AiService {
         }
         sb.append("""
 
-                Типы конвертации:
-                - PROJECT: создать новый проект (только если это большая долгосрочная инициатива)
-                - TASK: задача в существующем проекте (нужен suggestedProjectId из списка выше)
-                - ROUTINE: разовое дело без проекта (Текучка)
+                Типы действий:
+                - CREATE_TASK: создать задачу в существующем проекте (нужен projectId из списка выше)
+                - CREATE_PROJECT: создать новый проект (только для крупной долгосрочной инициативы)
+                - ADD_TO_CALENDAR: добавить напоминание/блокировку в календарь (если есть дата или ожидание)
+                - UPDATE_REFERENCE: обновить базу знаний/справочную (если заметка содержит полезную информацию о процессах, людях, технологиях)
+
+                Предложи наиболее подходящие действия. Для CREATE_TASK укажи projectId и projectTitle из списка выше.
 
                 Ответь строго в JSON без пояснений:
-                {"type":"...","suggestedTitle":"...","suggestedProjectId":null,"reason":"..."}
+                {"actions":[{"action":"CREATE_TASK","title":"...","projectId":2,"projectTitle":"Backend","reason":"..."},{"action":"UPDATE_REFERENCE","title":"...","projectId":null,"projectTitle":null,"reason":"..."}]}
 
-                Правила: type — одно из PROJECT/TASK/ROUTINE; suggestedTitle — кратко на языке заметки; suggestedProjectId — id из списка или null; reason — одно предложение.
+                Правила: action — одно из CREATE_TASK/CREATE_PROJECT/ADD_TO_CALENDAR/UPDATE_REFERENCE; title — кратко на языке заметки; reason — одно предложение.
                 """);
         return sb.toString();
     }
@@ -150,51 +166,49 @@ public class AiService {
         return sb.toString();
     }
 
-    private String buildSprintSummaryPrompt(List<CompletedTaskInfo> tasks, int sprintNumber) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Напиши краткое резюме завершённого спринта.\n\n");
-        sb.append("Спринт #").append(sprintNumber).append(". Выполненные задачи:\n");
-        for (CompletedTaskInfo t : tasks) {
-            String prefix = t.projectTitle() != null ? "[" + t.projectTitle() + "] " : "[Текучка] ";
-            sb.append("- ").append(prefix).append(t.title()).append("\n");
-        }
-        sb.append("""
+    private String buildAutocompletePrompt(String projectTitle, String currentText) {
+        return """
+                Ты помогаешь пользователю описать проект. Продолжи текст описания.
+
+                Название проекта: "%s"
+                Текст уже написан: "%s"
+
+                Предложи естественное продолжение (1-2 предложения), не повторяй написанное.
 
                 Ответь строго в JSON без пояснений:
-                {"summary":"..."}
-
-                Резюме: 2-3 предложения на русском. Что было сделано, краткая оценка динамики.
-                """);
-        return sb.toString();
+                {"suggestion":"..."}
+                """.formatted(projectTitle, currentText);
     }
 
-    // ─── Ollama HTTP call ─────────────────────────────────────────────────────
+    // ─── Groq API call ───────────────────────────────────────────────────────
 
-    private String callOllama(String userPrompt) {
+    private String callGroq(String userPrompt) {
         try {
-            OllamaChatRequest request = new OllamaChatRequest(
-                    ollamaProperties.getModel(),
+            GroqRequest request = new GroqRequest(
+                    aiProperties.getModel(),
                     List.of(
-                            new OllamaMessage("system", "Ты умный ассистент. Отвечай строго валидным JSON без пояснений."),
-                            new OllamaMessage("user", userPrompt)
+                            new GroqMessage("system", "Ты умный ассистент. Отвечай строго валидным JSON без пояснений."),
+                            new GroqMessage("user", userPrompt)
                     ),
-                    false,
-                    "json"
+                    new ResponseFormat("json_object")
             );
-            OllamaChatResponse response = ollamaRestClient.post()
-                    .uri("/api/chat")
+            GroqResponse response = aiRestClient.post()
+                    .uri("/openai/v1/chat/completions")
                     .body(request)
                     .retrieve()
-                    .body(OllamaChatResponse.class);
-            return response.message().content();
+                    .body(GroqResponse.class);
+            if (response == null || response.choices() == null || response.choices().isEmpty()) {
+                throw new AiUnavailableException("ИИ вернул пустой ответ");
+            }
+            return response.choices().get(0).message().content();
         } catch (RestClientException e) {
-            log.error("Ollama unavailable: {}", e.getMessage());
-            throw new AiUnavailableException("ИИ сервис недоступен. Убедитесь что Ollama запущена.");
+            log.error("Groq API unavailable: {}", e.getMessage());
+            throw new AiUnavailableException("ИИ сервис недоступен. Проверьте GROQ_API_KEY.");
         }
     }
 
     private void assertEnabled() {
-        if (!ollamaProperties.isEnabled()) {
+        if (!aiProperties.isEnabled()) {
             throw new AiUnavailableException("AI функции отключены (AI_ENABLED=false)");
         }
     }
@@ -221,16 +235,17 @@ public class AiService {
 
     public record ProjectInfo(Long id, String title) {}
 
-    public record CompletedTaskInfo(String title, String projectTitle) {}
-
-    private record OllamaChatRequest(
+    private record GroqRequest(
             String model,
-            List<OllamaMessage> messages,
-            boolean stream,
-            String format
+            List<GroqMessage> messages,
+            @JsonProperty("response_format") ResponseFormat responseFormat
     ) {}
 
-    private record OllamaMessage(String role, String content) {}
+    private record GroqMessage(String role, String content) {}
 
-    private record OllamaChatResponse(OllamaMessage message) {}
+    private record ResponseFormat(String type) {}
+
+    private record GroqResponse(List<GroqChoice> choices) {}
+
+    private record GroqChoice(GroqMessage message) {}
 }

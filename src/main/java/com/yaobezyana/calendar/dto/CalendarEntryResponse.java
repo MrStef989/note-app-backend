@@ -20,7 +20,7 @@ public class CalendarEntryResponse {
     @Schema(description = "Причина блокировки", example = "Ждём ответа от заказчика")
     private String note;
 
-    @Schema(description = "Дата снятия блокировки (ожидаемая)", example = "2026-05-10")
+    @Schema(description = "Дата снятия блокировки (null — ждём событие без конкретной даты)", example = "2026-05-10", nullable = true)
     private LocalDate date;
 
     @Schema(description = "Заблокированные задачи")

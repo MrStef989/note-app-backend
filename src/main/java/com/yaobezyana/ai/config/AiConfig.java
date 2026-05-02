@@ -7,16 +7,17 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-@EnableConfigurationProperties(OllamaProperties.class)
+@EnableConfigurationProperties(AiProperties.class)
 public class AiConfig {
 
     @Bean
-    public RestClient ollamaRestClient(OllamaProperties properties) {
+    public RestClient aiRestClient(AiProperties properties) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5_000);
-        factory.setReadTimeout(60_000);
+        factory.setConnectTimeout(10_000);
+        factory.setReadTimeout(30_000);
         return RestClient.builder()
-                .baseUrl(properties.getBaseUrl())
+                .baseUrl("https://api.groq.com")
+                .defaultHeader("Authorization", "Bearer " + properties.getApiKey())
                 .requestFactory(factory)
                 .build();
     }

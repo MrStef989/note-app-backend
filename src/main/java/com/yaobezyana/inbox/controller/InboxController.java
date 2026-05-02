@@ -1,6 +1,6 @@
 package com.yaobezyana.inbox.controller;
 
-import com.yaobezyana.ai.dto.InboxSuggestionResponse;
+import com.yaobezyana.ai.dto.InboxActionSuggestionsResponse;
 import com.yaobezyana.common.exception.ErrorResponse;
 import com.yaobezyana.inbox.dto.*;
 import com.yaobezyana.inbox.service.InboxService;
@@ -105,24 +105,29 @@ public class InboxController {
         return inboxService.convertNote(id, request, currentUser);
     }
 
-    @Operation(summary = "ИИ: предложение по конвертации заметки",
+    @Operation(summary = "[ИИ] Предложения по обработке заметки",
                description = """
-                       Анализирует текст заметки и предлагает: тип конвертации (PROJECT/TASK/ROUTINE),
-                       заголовок и проект. Не изменяет данные — финальный выбор остаётся за пользователем.
-                       Требует запущенного Ollama.
+                       Анализирует текст заметки и предлагает 2-3 варианта действий:
+                       - `CREATE_TASK` — создать задачу в существующем проекте
+                       - `CREATE_PROJECT` — создать новый проект (для крупных инициатив)
+                       - `ADD_TO_CALENDAR` — добавить напоминание/ожидание в календарь
+                       - `UPDATE_REFERENCE` — обновить базу знаний/справочную
+
+                       Данные не изменяются — финальный выбор остаётся за пользователем.
+                       Работает через Groq API (бесплатно). Требует GROQ_API_KEY.
                        """)
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Предложение ИИ",
-                    content = @Content(schema = @Schema(implementation = InboxSuggestionResponse.class))),
+            @ApiResponse(responseCode = "200", description = "Список предложений ИИ",
+                    content = @Content(schema = @Schema(implementation = InboxActionSuggestionsResponse.class))),
             @ApiResponse(responseCode = "404", description = "Заметка не найдена",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "503", description = "Ollama недоступна",
+            @ApiResponse(responseCode = "503", description = "AI сервис недоступен",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping("/{id}/suggest")
-    public InboxSuggestionResponse suggest(
+    public InboxActionSuggestionsResponse suggest(
             @Parameter(description = "ID заметки", example = "1") @PathVariable Long id,
             @AuthenticationPrincipal User currentUser) {
-        return inboxService.suggestConversion(id, currentUser.getId());
+        return inboxService.suggestActions(id, currentUser.getId());
     }
 }

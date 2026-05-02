@@ -33,7 +33,7 @@ public class CalendarEntry {
     @Column(nullable = false)
     private String note;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private LocalDate date;
 
     @ManyToMany

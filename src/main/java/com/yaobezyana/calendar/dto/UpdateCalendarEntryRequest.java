@@ -16,8 +16,7 @@ public class UpdateCalendarEntryRequest {
     @Schema(description = "Причина блокировки", example = "Ждём ответа от заказчика", requiredMode = Schema.RequiredMode.REQUIRED)
     private String note;
 
-    @NotNull
-    @Schema(description = "Дата снятия блокировки", example = "2026-05-15", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Дата снятия блокировки (опционально — если ждём событие без конкретной даты)", example = "2026-05-15", nullable = true)
     private LocalDate date;
 
     @Schema(description = "IDs задач которые блокируются (пустой список = снять блокировку со всех задач)", example = "[5, 7]")
