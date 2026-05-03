@@ -218,8 +218,9 @@ public class AiService {
     private String resolveProjectTitle(List<AvailableProjectGroup> groups, Long projectId) {
         return groups.stream()
                 .filter(g -> projectId == null ? g.getProjectId() == null : projectId.equals(g.getProjectId()))
+                .findFirst()
                 .map(AvailableProjectGroup::getProjectTitle)
-                .findFirst().orElse(null);
+                .orElse(null);
     }
 
     private String resolveTaskTitle(List<AvailableProjectGroup> groups, Long projectId, Long taskId) {
@@ -227,8 +228,9 @@ public class AiService {
                 .filter(g -> projectId == null ? g.getProjectId() == null : projectId.equals(g.getProjectId()))
                 .flatMap(g -> g.getTasks().stream())
                 .filter(t -> taskId.equals(t.getId()))
+                .findFirst()
                 .map(TaskResponse::getTitle)
-                .findFirst().orElse(null);
+                .orElse(null);
     }
 
     // ─── Inner types ──────────────────────────────────────────────────────────
