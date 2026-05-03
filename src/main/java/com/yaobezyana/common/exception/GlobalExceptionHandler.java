@@ -7,11 +7,12 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
+import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(AiUnavailableException.class)
@@ -49,6 +50,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception ex) {
+        log.error("Unhandled backend exception", ex);
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(error(500, "Internal server error"));
     }
